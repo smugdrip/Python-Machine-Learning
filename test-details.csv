@@ -1,0 +1,13 @@
+Applicant_ID,Annual_Income,Applicant_Age,Work_Experience,Marital_Status,House_Ownership,Vehicle_Ownership(car),Occupation,Residence_City,Residence_State,Years_in_Current_Employment,Years_in_Current_Residence,Loan_Default_Risk
+75722,9657655,76,0,single,rented,no,Psychologist,Jalandhar,Punjab,0,12,0
+80185,9259353,37,18,single,rented,no,Petroleum_Engineer,Bally,West_Bengal,12,11,0
+19865,1509721,66,8,single,rented,no,Drafter,Indore,Madhya_Pradesh,4,12,0
+76700,5867312,43,1,single,owned,no,Chartered_Accountant,Kurnool[18],Andhra_Pradesh,1,13,1
+92992,7223191,44,9,single,rented,no,Air_traffic_controller,Asansol,West_Bengal,9,13,0
+76435,1161425,45,14,single,rented,no,Biomedical_Engineer,Bongaigaon,Assam,13,13,0
+84005,7059529,63,8,single,rented,yes,Fashion_Designer,Katihar,Bihar,8,13,1
+80918,555485,31,15,single,rented,yes,Magistrate,Sikar,Rajasthan,12,11,0
+60768,5395461,71,10,single,rented,no,Technology_specialist,Chinsurah,West_Bengal,5,10,0
+50075,4772948,46,17,single,rented,no,Air_traffic_controller,Muzaffarnagar,Uttar_Pradesh,11,14,1
+27702,5098928,71,17,single,rented,no,Lawyer,Darbhanga,Bihar,4,11,0
+42142,6259059,70,8,married,rented,yes,Civil_servant,Chandigarh_city,Chandigarh,8,10,0
