@@ -22,15 +22,38 @@ from keras.wrappers.scikit_learn import KerasClassifier
 from sklearn.model_selection import GridSearchCV
 from keras.callbacks import EarlyStopping
 from sklearn.base import clone
+import seaborn as sns
 
 # class for early stopping for grid search
+# class KerasClassifierWithEarlyStopping(KerasClassifier):
+    
+#     def __init__(self, build_fn=None, **sk_params):
+#         super(KerasClassifierWithEarlyStopping, self).__init__(build_fn, **sk_params)
+#         # Initialize the early stopping callback
+#         self.early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+    
+#     def fit(self, X, y, **kwargs):
+#         # If not already included, add early stopping to callbacks
+#         if 'callbacks' not in kwargs:
+#             kwargs['callbacks'] = [self.early_stopping]
+#         else:
+#             if not any(isinstance(callback, EarlyStopping) for callback in kwargs['callbacks']):
+#                 kwargs['callbacks'].append(self.early_stopping)
+                
+        # return super(KerasClassifierWithEarlyStopping, self).fit(X, y, **kwargs)
+
 class KerasClassifierWithEarlyStopping(KerasClassifier):
-    def __init__(self, build_fn=None, **sk_params):
+    
+    def __init__(self, build_fn=None, validation_split=0.1, **sk_params):
         super(KerasClassifierWithEarlyStopping, self).__init__(build_fn, **sk_params)
-        # Initialize the early stopping callback
+        self.validation_split = validation_split
         self.early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
     
     def fit(self, X, y, **kwargs):
+        # Ensure validation split is passed to fit method
+        if 'validation_split' not in kwargs:
+            kwargs['validation_split'] = self.validation_split
+        
         # If not already included, add early stopping to callbacks
         if 'callbacks' not in kwargs:
             kwargs['callbacks'] = [self.early_stopping]
@@ -38,9 +61,17 @@ class KerasClassifierWithEarlyStopping(KerasClassifier):
             if not any(isinstance(callback, EarlyStopping) for callback in kwargs['callbacks']):
                 kwargs['callbacks'].append(self.early_stopping)
                 
-        return super(KerasClassifierWithEarlyStopping, self).fit(X, y, **kwargs)
-
-def create_model( optimizer='adam', activation='relu', input_dim=None ):
+        # Call the superclass fit method
+        history = super(KerasClassifierWithEarlyStopping, self).fit(X, y, **kwargs)
+        
+        # After training, store the number of epochs run
+        self.epochs_run = self.early_stopping.stopped_epoch
+        
+        # Return the training history
+        return history
+    
+# Define your model creation function
+def create_model(optimizer='adam', activation='relu', input_dim=None):
     model = Sequential()
     model.add(Dense(12, input_dim=input_dim, activation=activation))
     model.add(Dense(8, activation=activation))
@@ -109,8 +140,6 @@ def main():
             ('cat', categorical_transformer, categorical)
         ]
     )
-    
-    print('Begin training model...')
 
     predictors_preprocessed = preprocessor.fit_transform(predictors)
 
@@ -119,24 +148,28 @@ def main():
 
     # split dataset into training and testing sets
     # test 30% of the data, train on 70% of the data
-    predictors_train, predictors_test, target_train, target_test = train_test_split(predictors_preprocessed, target, test_size=0.3, random_state=42)
+    predictors_train, predictors_test, target_train, target_test = train_test_split( predictors_preprocessed, target, test_size=0.3, random_state=42 )
 
-    # Assuming predictors_train is a scipy.sparse.csr_matrix
     predictors_train = predictors_train.toarray()  # Convert to dense NumPy array
     predictors_test = predictors_test.toarray()  # Convert to dense NumPy array
+    
+    print('Begin training model...')
 
+
+    # Batch search will iterate through each possible set of parameters
     if ( batch_search ):
-        # Define the grid search parameters
+        
+        # define the grid search parameters
         param_grid = {
-            'batch_size': [ 20, 40 ],
-            'epochs': [ 20, 40 ],
-            'optimizer': ['Nadam'],
-            'activation': ['relu'],
-            'input_dim': [num_features]  # Ensure this is passed as a fixed parameter
+            'batch_size': [ 32, 64 ],
+            'epochs': [ 50, 100 ],
+            'optimizer': ['Nadam', 'Adam'],
+            'activation': ['relu', 'tanh'],
+
         }
 
         # Define the neural network model
-        model = KerasClassifier( build_fn=create_model, input_dim=num_features, verbose=0 )
+        model = KerasClassifierWithEarlyStopping(build_fn=create_model, input_dim=num_features, optimizer='adam', verbose=0)
 
         # Grid search
         grid = GridSearchCV( estimator=model, param_grid=param_grid, n_jobs=-1, cv=3, verbose=0 )
@@ -149,26 +182,50 @@ def main():
         params = grid_result.cv_results_['params']
         for mean, stdev, param in zip(means, stds, params):
             print("%f (%f) with: %r" % (mean, stdev, param))
+
+        for i in range(len(grid.cv_results_['params'])):
+            model = grid.best_estimator_.model  # This assumes you're interested in the best model
+            print(f"Model {i}: {grid.cv_results_['params'][i]}, Epochs Run: {model.epochs_run}")
+
+        show_heatmap = bool(int(input('Enter 1 to show heatmap or 0 to skip: ')))
+
+        if ( show_heatmap ):
+            # Convert grid search results to a DataFrame
+            results_df = pd.DataFrame(grid_result.cv_results_)
+
+            # Pivot the DataFrame to the right format
+            pivot_df = results_df.pivot("param_epochs", "param_batch_size", "mean_test_score")
+
+            # Create the heatmap
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(pivot_df, annot=True, cmap="YlGnBu", fmt=".3f")
+            plt.title('Grid Search Scores')
+            plt.xlabel('Batch Size')
+            plt.ylabel('Epochs')
+            plt.show()
+        
+        
     
+    # normal mode will train one model with the given parameters
     else:
             
         # Define the neural network model
         model = tf.keras.Sequential([
-            tf.keras.layers.Dense(128, activation='relu', input_shape=(predictors_train.shape[1],)),
-            tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Dense(64, activation='relu'),
-            tf.keras.layers.Dense(1, activation='sigmoid')
+            tf.keras.layers.Dense( 128, activation='relu', input_shape=( predictors_train.shape[1], ) ),
+            tf.keras.layers.Dropout( 0.2 ),
+            tf.keras.layers.Dense( 64, activation='relu' ),
+            tf.keras.layers.Dense( 1, activation='sigmoid' )
         ])
 
-        model.compile(optimizer='adam',
-                  loss='binary_crossentropy',
-                  metrics=['accuracy'])
+        model.compile( optimizer='adam',
+                  loss = 'binary_crossentropy',
+                  metrics = ['accuracy'] )
     
         # Early stopping callback
-        early_stopping_cb = tf.keras.callbacks.EarlyStopping(patience=10, restore_best_weights=True)
+        early_stopping_cb = tf.keras.callbacks.EarlyStopping( patience = 10, restore_best_weights = True )
 
         # Train the model
-        history = model.fit(predictors_train, target_train, epochs=100, batch_size=32, validation_split=0.2, callbacks=[early_stopping_cb])
+        history = model.fit( predictors_train, target_train, epochs=100, batch_size=32, validation_split=0.2, callbacks=[early_stopping_cb] )
 
         # Evaluate the model on the test set
         print(model.evaluate(predictors_test, target_test))
